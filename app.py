@@ -10,107 +10,131 @@ import seaborn as sns
 st.set_page_config(page_title="Sistem Clustering Mahasiswa", layout="wide")
 
 st.title("📊 Sistem Clustering Kemampuan Akademik Mahasiswa")
-st.write("Mengelompokkan mahasiswa berdasarkan Kehadiran, Tugas, UTS, dan UAS menggunakan algoritme K-Means.")
+st.write("Unggah file data mahasiswa Anda (CSV/Excel) untuk mengelompokkan mereka menggunakan algoritme K-Means.")
 
-# --- 1. MEMUAT DATA ---
-# Di tugas nyata, Anda bisa menggunakan st.file_uploader. 
-# Untuk demo ini, kita masukkan data dummy yang Anda berikan langsung ke dalam kode.
-@st.cache_data
-def load_initial_data():
-    data = {
-        'No': list(range(1, 51)),
-        'NIM': [221000 + i for i in range(1, 51)],
-        'Nama': [
-            "Andi Saputra", "Budi Santoso", "Citra Lestari", "Deni Pratama", "Eka Putri",
-            "Fajar Nugroho", "Gina Maharani", "Hendra Wijaya", "Intan Permata", "Joko Susilo",
-            "Kiki Amelia", "Luthfi Ramadhan", "Maya Sari", "Nanda Saputri", "Oki Prabowo",
-            "Putra Aditya", "Qori Aisyah", "Rendi Kurniawan", "Siska Melati", "Tono Hartono",
-            "Umi Kalsum", "Vina Oktavia", "Wahyu Firmansyah", "Xenia Putri", "Yusuf Hidayat",
-            "Zahra Nabila", "Agus Salim", "Bella Safitri", "Cahyo Nugraha", "Dina Puspita",
-            "Eko Riyanto", "Fitri Handayani", "Galih Prasetyo", "Hana Maharani", "Irfan Maulana",
-            "Jihan Apriliya", "Kevin Alvaro", "Lina Marlina", "M Rizky", "Nia Ramadhani",
-            "Ovan Saputra", "Prita Lestari", "Qomaruddin", "Rara Oktaviani", "Sandi Permana",
-            "Tiara Anjani", "Umar Faruq", "Vicky Fernando", "Wulan Sari", "Yoga Pratama"
-        ],
-        'Kehadiran': [90,75,95,60,85,70,98,55,88,78,92,65,83,58,89,72,96,62,84,68,91,57,80,94,66,87,59,82,74,97,63,86,71,93,56,81,69,99,64,88,73,95,61,84,67,90,54,79,96,65],
-        'Tugas': [88,70,92,65,80,72,95,60,86,75,90,68,81,55,87,74,94,64,82,66,89,59,78,93,67,85,61,84,73,96,62,88,69,91,58,80,71,97,63,89,75,94,60,85,68,91,56,77,95,66],
-        'UTS': [85,72,90,58,82,68,94,57,84,73,91,64,79,54,86,70,95,60,83,67,88,56,77,92,65,86,60,81,72,95,61,87,70,90,55,79,68,98,62,87,74,93,59,83,66,89,55,78,94,64],
-        'UAS': [87,74,94,62,84,69,97,58,85,76,93,66,82,57,88,71,96,61,85,69,90,58,79,95,64,88,62,83,75,98,64,89,72,92,57,82,70,99,65,90,76,96,63,86,69,92,57,80,97,67]
-    }
-    return pd.DataFrame(data)
+# --- 1. FITUR UPLOAD DATA INDEPENDEN ---
+st.header("📂 Unggah Dataset Mahasiswa")
+uploaded_file = st.file_uploader("Pilih file CSV atau Excel", type=["csv", "xlsx"])
 
-df = load_initial_data()
+# Program hanya akan berjalan JIKA user sudah mengunggah file
+if uploaded_file is not None:
+    try:
+        # Membaca file berdasarkan formatnya
+        if uploaded_file.name.endswith('.csv'):
+            df = pd.read_csv(uploaded_file)
+        else:
+            df = pd.read_excel(uploaded_file)
+            
+        st.success("🎉 Data berhasil diunggah!")
+        
+        # Menampilkan data awal
+        if st.checkbox("Tampilkan Data Awal Mahasiswa"):
+            st.dataframe(df, use_container_width=True)
 
-# Menampilkan data awal
-if st.checkbox("Tampilkan Data Awal Mahasiswa (50 Baris)"):
-    st.dataframe(df, use_container_width=True)
+        # --- 2. VALIDASI KOLOM & PREPROCESSING ---
+        # Memastikan kolom yang dibutuhkan ada di dalam file yang diunggah
+        features = ['Kehadiran', 'Tugas', 'UTS', 'UAS']
+        
+        # Pengecekan apakah semua fitur numerik tersedia di dataset pembaca
+        if all(col in df.columns for col in features):
+            X = df[features]
 
-# --- 2. PREPROCESSING ---
-# Memilih fitur numerik yang akan digunakan untuk klustering
-features = ['Kehadiran', 'Tugas', 'UTS', 'UAS']
-X = df[features]
+            # Normalisasi data menggunakan StandardScaler
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(X)
 
-# Normalisasi data menggunakan StandardScaler
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+            # --- 3. PROSES CLUSTERING (K-MEANS) ---
+            k_terpilih = 3
+            kmeans = KMeans(n_clusters=k_terpilih, random_state=42)
+            df['Cluster_Label'] = kmeans.fit_predict(X_scaled)
 
-# --- 3. PROSES CLUSTERING (K-MEANS) ---
-# Menentukan jumlah K tetap yaitu 3 sesuai kebutuhan tugas
-k_terpilih = 3
-kmeans = KMeans(n_clusters=k_terpilih, random_state=42)
-df['Cluster_Label'] = kmeans.fit_predict(X_scaled)
+            # --- 4. PEMETAAN NAMA KLUSTER ---
+            cluster_means = df.groupby('Cluster_Label')[features].mean().mean(axis=1)
+            sorted_clusters = cluster_means.sort_values(ascending=False).index
 
-# --- 4. PEMETAAN NAMA KLUSTER ---
-# Mencari tahu rata-rata total nilai per kluster untuk melabeli secara otomatis secara logis
-cluster_means = df.groupby('Cluster_Label')[features].mean().mean(axis=1)
-sorted_clusters = cluster_means.sort_values(ascending=False).index
+            cluster_mapping = {
+                sorted_clusters[0]: 'Berprestasi',
+                sorted_clusters[1]: 'Menengah',
+                sorted_clusters[2]: 'Perlu Pembinaan'
+            }
+            df['Status Mahasiswa'] = df['Cluster_Label'].map(cluster_mapping)
 
-# Membuat kamus pemetaan (Kluster nilai tertinggi = Berprestasi, dst)
-cluster_mapping = {
-    sorted_clusters[0]: 'Berprestasi',
-    sorted_clusters[1]: 'Menengah',
-    sorted_clusters[2]: 'Perlu Pembinaan'
-}
-df['Status Mahasiswa'] = df['Cluster_Label'].map(cluster_mapping)
+            # --- 5. TAMPILKAN HASIL ---
+            st.header("🏆 Hasil Pengelompokkan Mahasiswa")
 
-# --- 5. TAMPILKAN HASIL ---
-st.header("🏆 Hasil Pengelompokkan Mahasiswa")
+            # Statistik jumlah mahasiswa per kategori
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Mahasiswa Berprestasi", f"{len(df[df['Status Mahasiswa']=='Berprestasi'])} Orang")
+            with col2:
+                st.metric("Mahasiswa Menengah", f"{len(df[df['Status Mahasiswa']=='Menengah'])} Orang")
+            with col3:
+                st.metric("Perlu Pembinaan", f"{len(df[df['Status Mahasiswa']=='Perlu Pembinaan'])} Orang")
 
-# Statistik jumlah mahasiswa per kategori
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("Mahasiswa Berprestasi", f"{len(df[df['Status Mahasiswa']=='Berprestasi'])} Orang")
-with col2:
-    st.metric("Mahasiswa Menengah", f"{len(df[df['Status Mahasiswa']=='Menengah'])} Orang")
-with col3:
-    st.metric("Perlu Pembinaan", f"{len(df[df['Status Mahasiswa']=='Perlu Pembinaan'])} Orang")
+            # Dropdown filter hasil kluster
+            status_filter = st.selectbox("Filter berdasarkan status:", ["Semua", "Berprestasi", "Menengah", "Perlu Pembinaan"])
+            if status_filter != "Semua":
+                df_filtered = df[df['Status Mahasiswa'] == status_filter]
+            else:
+                df_filtered = df
 
-# Dropdown filter hasil kluster
-status_filter = st.selectbox("Filter berdasarkan status:", ["Semua", "Berprestasi", "Menengah", "Perlu Pembinaan"])
-if status_filter != "Semua":
-    df_filtered = df[df['Status Mahasiswa'] == status_filter]
+            # Menampilkan hasil akhir tabel 
+            kolom_tampil = [col for col in ['NIM', 'Nama', 'Kehadiran', 'Tugas', 'UTS', 'UAS', 'Status Mahasiswa'] if col in df.columns]
+            st.dataframe(df_filtered[kolom_tampil], use_container_width=True)
+
+            # --- 6. VISUALISASI DIAGRAM BATANG PERSENTASE (COMPACT VERSION) ---
+            st.header("📊 Visualisasi Persentase Kluster")
+            
+            # Menghitung persentase masing-masing kategori
+            persentase_data = df['Status Mahasiswa'].value_counts(normalize=True) * 100
+            
+            # Memastikan urutan kategori dari atas ke bawah konsisten
+            urutan_kategori = ['Berprestasi', 'Menengah', 'Perlu Pembinaan']
+            persentase_data = persentase_data.reindex(urutan_kategori).fillna(0)
+
+            # Membalik urutan agar 'Berprestasi' berada di posisi paling atas pada grafik horizontal
+            persentase_data = persentase_data.iloc[::-1]
+
+            # Membuat grafik dengan ukuran lebih kecil/compact (Lebar: 7, Tinggi: 2.5)
+            fig, ax = plt.subplots(figsize=(7, 2.5))
+            colors = ['#e74c3c', '#3498db', '#2ecc71']  # Merah (Pembinaan), Biru (Menengah), Hijau (Berprestasi)
+            
+            # Menggunakan barh untuk diagram horizontal
+            bars = ax.barh(persentase_data.index, persentase_data.values, color=colors, edgecolor='black', height=0.5)
+            
+            # Menambahkan label teks persentase tepat di ujung kanan setiap batang
+            for bar in bars:
+                width = bar.get_width()
+                ax.annotate(f' {width:.1f}%',
+                            xy=(width, bar.get_y() + bar.get_height() / 2),
+                            xytext=(3, 0),  # offset horizontal 3 poin ke kanan
+                            textcoords="offset points",
+                            ha='left', va='center', fontsize=10, fontweight='bold')
+
+            # Mengatur estetika tampilan yang minimalis dan compact
+            ax.set_title("Distribusi Kelompok Mahasiswa (%)", fontsize=11, fontweight='bold', pad=10)
+            
+            # Menghapus garis angka bawah (X-axis) dan grid karena sudah ada teks persentase langsung
+            ax.get_xaxis().set_visible(False)
+            
+            # Menghilangkan semua garis tepi kotak grafik (spines)
+            sns.despine(ax=ax, top=True, right=True, left=True, bottom=True)
+            
+            # Memperkecil ukuran font label kategori (Y-axis) agar rapi
+            ax.tick_params(axis='y', labelsize=10, length=0)
+            
+            # Render ke streamlit
+            st.pyplot(fig)
+
+            # Menampilkan analisis rata-rata nilai per kelompok
+            st.subheader("📊 Rata-rata Nilai per Kelompok")
+            st.dataframe(df.groupby('Status Mahasiswa')[features].mean())
+            
+        else:
+            st.error(f"Format file salah! Pastikan file Anda memiliki kolom wajib: {', '.join(features)}")
+
+    except Exception as e:
+        st.error(f"Terjadi kesalahan saat memproses file: {e}")
+
 else:
-    df_filtered = df
-
-st.dataframe(df_filtered[['NIM', 'Nama', 'Kehadiran', 'Tugas', 'UTS', 'UAS', 'Status Mahasiswa']], use_container_width=True)
-
-# --- 6. VISUALISASI ---
-st.header("📈 Visualisasi Kluster")
-fig, ax = plt.subplots(figsize=(10, 5))
-
-# Plot sebaran menggunakan kombinasi Tugas vs UAS sebagai representasi visual
-sns.scatterplot(
-    data=df, 
-    x='Tugas', 
-    y='UAS', 
-    hue='Status Mahasiswa', 
-    palette={'Berprestasi': 'green', 'Menengah': 'blue', 'Perlu Pembinaan': 'red'},
-    s=100,
-    ax=ax
-)
-ax.set_title("Sebaran Kelompok Mahasiswa (Berdasarkan Nilai Tugas vs UAS)")
-st.pyplot(fig)
-
-# Menampilkan analisis rata-rata nilai per kelompok
-st.subheader("📊 Rata-rata Nilai per Kelompok")
-st.dataframe(df.groupby('Status Mahasiswa')[features].mean())
+    st.info("💡 Silakan unggah file Excel/CSV data mahasiswa terlebih dahulu di atas untuk memulai analisis.")
